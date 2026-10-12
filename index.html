@@ -3,12 +3,12 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Jarloo Avenue: Nantwich Allotments</title>
+<title>Jarloo Avenue: Nantwich</title>
 <style>
   html, body { margin: 0; height: 100%; background: #0b0f14; color: #eee; font-family: system-ui, sans-serif; }
   #info { position: fixed; top: 12px; left: 12px; right: 12px; font-size: 14px; line-height: 1.4;
           background: rgba(0,0,0,0.5); padding: 8px 10px; border-radius: 8px; pointer-events: none; }
-  #attrib { position: fixed; bottom: 6px; right: 8px; font-size: 11px; opacity: 0.7; }
+  #attrib { position: fixed; bottom: 6px; right: 8px; font-size: 11px; opacity: 0.7; pointer-events: none; }
 </style>
 <script type="importmap">
 {
@@ -21,14 +21,14 @@
 </head>
 <body>
 <div id="info">Coins: <span id="coins">0</span> · Harvested: <span id="harvest">0</span><br/>
-  Point at ground and pull trigger to teleport. Point at a plot to till, plant, water, and harvest. Point at the market stall and pull trigger to sell.</div>
+  Pull the trigger on the ground to teleport. Use a plot to till, plant, water and harvest. Use the market stall to sell.</div>
 <div id="attrib">Map data © OpenStreetMap contributors (ODbL)</div>
 
 <script type="module">
 import * as THREE from 'three';
 import { VRButton } from 'three/addons/webxr/VRButton.js';
 
-// ---- Renderer / scene ----
+// ---------- Renderer / scene ----------
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(window.devicePixelRatio);
 renderer.setSize(window.innerWidth, window.innerHeight);
@@ -37,95 +37,189 @@ document.body.appendChild(renderer.domElement);
 document.body.appendChild(VRButton.createButton(renderer));
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x9fc7e0);
-scene.fog = new THREE.Fog(0x9fc7e0, 40, 160);
+scene.background = new THREE.Color(0xa9cfe6);
+scene.fog = new THREE.Fog(0xa9cfe6, 150, 420);
 
-const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.05, 300);
-const rig = new THREE.Group();
+const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.05, 900);
+const rig = new THREE.Group(); // player position in world space
 rig.add(camera);
 scene.add(rig);
+rig.position.set(0, 0, 40); // start at the southern edge of the town square
 
-scene.add(new THREE.HemisphereLight(0xffffff, 0x556644, 1.1));
-const sun = new THREE.DirectionalLight(0xffffff, 0.8);
-sun.position.set(30, 50, 20);
+scene.add(new THREE.HemisphereLight(0xffffff, 0x4d6b3c, 1.0));
+const sun = new THREE.DirectionalLight(0xfff4e0, 0.9);
+sun.position.set(120, 200, 80);
 scene.add(sun);
 
-// ---- Ground ----
+// World units are metres, with the town centre at (0, 0). This matches the
+// scale of the OSM data (scripts/fetch-osm.mjs) and the Minecraft reference world.
+
+// ---------- Terrain ----------
+const GROUND_SIZE = 1800; // play area, roughly the town plus its edges
 const ground = new THREE.Mesh(
-  new THREE.CircleGeometry(120, 48),
-  new THREE.MeshLambertMaterial({ color: 0x5f8a45 })
+  new THREE.PlaneGeometry(GROUND_SIZE, GROUND_SIZE),
+  new THREE.MeshLambertMaterial({ color: 0x6a9a4e })
 );
 ground.rotation.x = -Math.PI / 2;
 ground.userData.teleport = true;
 scene.add(ground);
 
-// ---- Allotment plots (placeholder layout) ----
+// Roads: a simple street grid through the town centre.
+const roadMat = new THREE.MeshLambertMaterial({ color: 0x55565a });
+function road(x, z, w, d) {
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(w, d), roadMat);
+  m.rotation.x = -Math.PI / 2;
+  m.position.set(x, 0.02, z);
+  m.userData.teleport = true;
+  scene.add(m);
+}
+road(0, 0, 14, 400);   // north-south spine (Welsh Row / Hospital Street style)
+road(0, 0, 400, 12);   // east-west (Market Street style)
+road(-120, 60, 10, 260);
+road(120, -60, 10, 260);
+
+// Canal: a blue strip running across the south of town, with a towpath.
+const canal = new THREE.Mesh(
+  new THREE.PlaneGeometry(900, 14),
+  new THREE.MeshLambertMaterial({ color: 0x2f6f8f })
+);
+canal.rotation.x = -Math.PI / 2;
+canal.position.set(0, 0.03, 130);
+scene.add(canal);
+const towpath = new THREE.Mesh(new THREE.PlaneGeometry(900, 4), new THREE.MeshLambertMaterial({ color: 0x8a7a5c }));
+towpath.rotation.x = -Math.PI / 2;
+towpath.position.set(0, 0.04, 124);
+towpath.userData.teleport = true;
+scene.add(towpath);
+
+// Town square (market place) in the middle, where the market stall sits.
+const square = new THREE.Mesh(
+  new THREE.PlaneGeometry(60, 40),
+  new THREE.MeshLambertMaterial({ color: 0xa39b8c })
+);
+square.rotation.x = -Math.PI / 2;
+square.position.set(0, 0.03, 0);
+square.userData.teleport = true;
+scene.add(square);
+
+// ---------- Allotments (the farming plots) ----------
 const plots = [];
-const plotMat = new THREE.MeshLambertMaterial({ color: 0x6b4a2b });
-const PLOT_STATES = ['empty', 'tilled', 'planted', 'grown'];
-const plotGeo = new THREE.BoxGeometry(2.2, 0.1, 3.4);
+const PLOT_COLOURS = { empty: 0x6b4a2b, tilled: 0x4a2f18, planted: 0x3d6b2a, grown: 0x7fbf3f };
+const plotGeo = new THREE.BoxGeometry(2.2, 0.15, 3.4);
+const allotmentOrigin = { x: -230, z: -200 };
 for (let row = 0; row < 3; row++) {
-  for (let col = 0; col < 4; col++) {
-    const m = new THREE.Mesh(plotGeo, plotMat.clone());
-    m.position.set(-6 + col * 3.0, 0.05, -14 - row * 4.0);
+  for (let col = 0; col < 5; col++) {
+    const m = new THREE.Mesh(plotGeo, new THREE.MeshLambertMaterial({ color: PLOT_COLOURS.empty }));
+    m.position.set(allotmentOrigin.x + col * 3.2, 0.08, allotmentOrigin.z + row * 4.2);
     m.userData = { plot: true, state: 'empty', watered: false, timer: 0 };
     scene.add(m);
     plots.push(m);
   }
 }
+// Allotment fence and sign.
+const fenceMat = new THREE.MeshLambertMaterial({ color: 0x8b6b43 });
+const fence = new THREE.Mesh(new THREE.BoxGeometry(44, 0.8, 0.2), fenceMat);
+fence.position.set(allotmentOrigin.x + 6, 0.4, allotmentOrigin.z - 3);
+scene.add(fence);
 
-// ---- Market stall (placeholder) ----
+// ---------- Market stall ----------
 const stall = new THREE.Mesh(
-  new THREE.BoxGeometry(4, 2.2, 2),
+  new THREE.BoxGeometry(4, 2.4, 2.2),
   new THREE.MeshLambertMaterial({ color: 0xc0392b })
 );
-stall.position.set(8, 1.1, -6);
+stall.position.set(0, 1.2, -4);
 stall.userData.market = true;
 scene.add(stall);
+const awning = new THREE.Mesh(new THREE.BoxGeometry(4.6, 0.15, 2.8), new THREE.MeshLambertMaterial({ color: 0xf2efe6 }));
+awning.position.set(0, 2.5, -4);
+scene.add(awning);
 
-// ---- Placeholder town blocks; real OSM buildings go in data/nantwich.json ----
-const buildingMat = new THREE.MeshLambertMaterial({ color: 0xd9cbb0 });
-async function loadBuildings() {
-  try {
-    const res = await fetch('data/nantwich.json');
-    if (!res.ok) throw new Error('no data file');
-    const data = await res.json();
-    for (const b of data.buildings) {
-      const geo = new THREE.BoxGeometry(b.width, b.height, b.depth);
-      const m = new THREE.Mesh(geo, buildingMat);
-      m.position.set(b.x, b.height / 2, b.z);
-      m.rotation.y = b.rotation || 0;
-      scene.add(m);
-      if (b.name) addLabel(b.name, b.x, b.height + 1, b.z, b.isPub);
-    }
-  } catch {
-    // Fallback: a few generic blocks so the scene is not empty.
-    for (let i = 0; i < 8; i++) {
-      const m = new THREE.Mesh(new THREE.BoxGeometry(6, 6 + (i % 3) * 2, 6), buildingMat);
-      m.position.set(-30 + i * 9, 3 + (i % 3), 30);
-      scene.add(m);
-    }
-  }
-}
-function addLabel(text, x, y, z, isPub) {
+// ---------- Buildings ----------
+const buildingMat = new THREE.MeshLambertMaterial({ color: 0xd8c8a8 }); // timber/plaster tone
+const pubMat = new THREE.MeshLambertMaterial({ color: 0x8c3b2a });
+const landmarkMat = new THREE.MeshLambertMaterial({ color: 0xe3b65c });
+
+function addLabel(text, x, y, z, style = 'plain') {
   const c = document.createElement('canvas');
   c.width = 512; c.height = 96;
   const g = c.getContext('2d');
-  g.fillStyle = isPub ? 'rgba(90,30,20,0.9)' : 'rgba(0,0,0,0.6)';
+  g.fillStyle = style === 'landmark' ? 'rgba(120,70,0,0.9)' : style === 'pub' ? 'rgba(90,30,20,0.9)' : 'rgba(0,0,0,0.6)';
   g.fillRect(0, 0, 512, 96);
   g.fillStyle = '#fff';
   g.font = 'bold 40px sans-serif';
   g.textAlign = 'center';
-  g.fillText(text, 256, 60);
-  const tex = new THREE.CanvasTexture(c);
-  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex }));
+  g.textBaseline = 'middle';
+  g.fillText(text, 256, 48);
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c) }));
   sprite.position.set(x, y, z);
-  sprite.scale.set(6, 1.1, 1);
+  sprite.scale.set(10, 1.9, 1);
   scene.add(sprite);
 }
-loadBuildings();
 
-// ---- Economy ----
+function addBuilding(b) {
+  const isLandmark = isOddfellows(b.name);
+  const mat = isLandmark ? landmarkMat : b.isPub ? pubMat : buildingMat;
+  const m = new THREE.Mesh(new THREE.BoxGeometry(b.width, b.height, b.depth), mat);
+  m.position.set(b.x, b.height / 2, b.z);
+  m.rotation.y = b.rotation || 0;
+  m.userData.building = true;
+  scene.add(m);
+  if (b.name && (b.isPub || isLandmark)) {
+    addLabel(b.name, b.x, b.height + 2, b.z, isLandmark ? 'landmark' : 'pub');
+  }
+}
+
+// Matches "The Oddfellows", "Oddfellows" and "Oddfellows Arms" from OSM names.
+const isOddfellows = (name) => !!name && /oddfellow/i.test(name);
+const ODDFELLOWS_NAME = 'The Oddfellows';
+
+// Use real OSM footprints when data/nantwich.json exists (run scripts/fetch-osm.mjs).
+// Otherwise build a placeholder town so the scene is never empty.
+async function buildTown() {
+  try {
+    const res = await fetch('data/nantwich.json');
+    if (!res.ok) throw new Error('no data file');
+    const data = await res.json();
+    for (const b of data.buildings) addBuilding(b);
+    return;
+  } catch {
+    placeholderTown();
+  }
+}
+
+// Simple grid of terraced houses around the square, leaving the roads clear.
+function placeholderTown() {
+  const rng = mulberry32(42);
+  for (let gx = -6; gx <= 6; gx++) {
+    for (let gz = -6; gz <= 6; gz++) {
+      const x = gx * 26, z = gz * 26;
+      if (Math.abs(x) < 16 || Math.abs(z) < 16) continue; // keep the streets clear
+      if (Math.abs(z - 130) < 14) continue;                 // keep the canal clear
+      if (rng() < 0.35) continue;
+      const h = 5 + Math.floor(rng() * 3) * 3;
+      addBuilding({
+        x: x + (rng() - 0.5) * 4, z: z + (rng() - 0.5) * 4,
+        width: 9 + rng() * 5, depth: 8 + rng() * 4, height: h,
+        rotation: 0, isPub: false, name: null,
+      });
+    }
+  }
+  // The Oddfellows: the central pub, on the square's north-east corner.
+  addBuilding({ x: 22, z: -18, width: 12, depth: 9, height: 8, isPub: true, name: ODDFELLOWS_NAME });
+}
+
+function mulberry32(a) {
+  return function () {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+buildTown();
+
+// ---------- Economy ----------
 let coins = 0, harvested = 0;
 const PRICE = 5;
 const coinsEl = document.getElementById('coins');
@@ -135,37 +229,37 @@ function refreshHud() {
   harvestEl.textContent = harvested;
 }
 
-// ---- Plot actions ----
-const GROW_TIME = 20; // seconds from planted to grown
+// ---------- Plot actions ----------
+const GROW_TIME = 20; // seconds from planted to grown, when watered
 function actOnPlot(plot) {
   const d = plot.userData;
   if (d.state === 'empty') {
     d.state = 'tilled';
-    plot.material.color.set(0x4a2f18);
+    plot.material.color.set(PLOT_COLOURS.tilled);
   } else if (d.state === 'tilled') {
     d.state = 'planted';
     d.timer = 0;
-    plot.material.color.set(0x3d6b2a);
+    plot.material.color.set(PLOT_COLOURS.planted);
   } else if (d.state === 'planted') {
-    d.watered = true; // water once; growth is slowed without water
+    d.watered = true;
   } else if (d.state === 'grown') {
     d.state = 'empty';
+    d.watered = false;
     harvested++;
-    plot.material.color.set(0x6b4a2b);
+    plot.material.color.set(PLOT_COLOURS.empty);
     refreshHud();
   }
 }
 
-// ---- Controllers ----
+// ---------- Controllers ----------
 const raycaster = new THREE.Raycaster();
 const tmpMat = new THREE.Matrix4();
+const pointerGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, -6)]);
 function setupController(i) {
   const controller = renderer.xr.getController(i);
   rig.add(controller);
   controller.addEventListener('selectstart', () => onSelect(controller));
-  const geo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, -2)]);
-  controller.add(new THREE.Line(geo, new THREE.LineBasicMaterial({ color: 0xffffff })));
-  return controller;
+  controller.add(new THREE.Line(pointerGeo, new THREE.LineBasicMaterial({ color: 0xffffff })));
 }
 setupController(0);
 setupController(1);
@@ -180,8 +274,7 @@ function onSelect(controller) {
   if (obj.userData.plot) {
     actOnPlot(obj);
   } else if (obj.userData.market) {
-    const sellable = harvested;
-    coins += sellable * PRICE;
+    coins += harvested * PRICE;
     harvested = 0;
     refreshHud();
   } else if (obj.userData.teleport) {
@@ -190,7 +283,7 @@ function onSelect(controller) {
   }
 }
 
-// ---- Loop ----
+// ---------- Loop ----------
 const clock = new THREE.Clock();
 renderer.setAnimationLoop(() => {
   const dt = clock.getDelta();
@@ -200,7 +293,7 @@ renderer.setAnimationLoop(() => {
       d.timer += dt * (d.watered ? 1 : 0.4);
       if (d.timer >= GROW_TIME) {
         d.state = 'grown';
-        p.material.color.set(0x7fbf3f);
+        p.material.color.set(PLOT_COLOURS.grown);
       }
     }
   }
