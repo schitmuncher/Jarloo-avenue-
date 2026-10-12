@@ -7,8 +7,9 @@
 import { writeFile, mkdir } from 'node:fs/promises';
 
 const OVERPASS = 'https://overpass-api.de/api/interpreter';
-// Nantwich bounding box (south, west, north, east).
-const BBOX = '53.0500,-2.5600,53.0900,-2.4900';
+// Nantwich bounding box (south, west, north, east). Matches the extent of the
+// Minecraft reference world (Arnis, "Arnis World: Nantwich", ~3.6 x 3.6 km).
+const BBOX = '53.051127,-2.544484,53.083138,-2.490843';
 
 const query = `
 [out:json][timeout:120];
@@ -32,7 +33,9 @@ const osm = await res.json();
 
 // Convert lat/lon to local metres around the town centre so the game works in
 // a flat coordinate space.
-const CENTRE = { lat: 53.0700, lon: -2.5200 };
+// Centre of the BBOX above, so local x/z are in metres (1 unit = 1 metre), the
+// same scale as the Minecraft reference world.
+const CENTRE = { lat: 53.067132, lon: -2.517664 };
 const M_PER_DEG_LAT = 111320;
 const M_PER_DEG_LON = 111320 * Math.cos((CENTRE.lat * Math.PI) / 180);
 const toXZ = (lat, lon) => ({
