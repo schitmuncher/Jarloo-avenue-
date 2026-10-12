@@ -73,22 +73,24 @@ function road(x, z, w, d) {
   m.userData.teleport = true;
   scene.add(m);
 }
-road(0, 0, 14, 400);   // north-south spine (Welsh Row / Hospital Street style)
-road(0, 0, 400, 12);   // east-west (Market Street style)
-road(-120, 60, 10, 260);
-road(120, -60, 10, 260);
+// Widths in metres: main streets ~8 m, side streets ~6 m (typical for a market town).
+road(0, 0, 8, 400);    // north-south spine
+road(0, 0, 400, 8);    // east-west high street
+road(-120, 60, 6, 260);
+road(120, -60, 6, 260);
 
 // Canal: a blue strip running across the south of town, with a towpath.
+// Canal ~10 m wide (Shropshire Union style narrow-beam channel is ~6 m; keep 10 m for the basin).
 const canal = new THREE.Mesh(
-  new THREE.PlaneGeometry(900, 14),
+  new THREE.PlaneGeometry(900, 10),
   new THREE.MeshLambertMaterial({ color: 0x2f6f8f })
 );
 canal.rotation.x = -Math.PI / 2;
 canal.position.set(0, 0.03, 130);
 scene.add(canal);
-const towpath = new THREE.Mesh(new THREE.PlaneGeometry(900, 4), new THREE.MeshLambertMaterial({ color: 0x8a7a5c }));
+const towpath = new THREE.Mesh(new THREE.PlaneGeometry(900, 3), new THREE.MeshLambertMaterial({ color: 0x8a7a5c }));
 towpath.rotation.x = -Math.PI / 2;
-towpath.position.set(0, 0.04, 124);
+towpath.position.set(0, 0.04, 127.5);
 towpath.userData.teleport = true;
 scene.add(towpath);
 
@@ -105,12 +107,13 @@ scene.add(square);
 // ---------- Allotments (the farming plots) ----------
 const plots = [];
 const PLOT_COLOURS = { empty: 0x6b4a2b, tilled: 0x4a2f18, planted: 0x3d6b2a, grown: 0x7fbf3f };
-const plotGeo = new THREE.BoxGeometry(2.2, 0.15, 3.4);
+// Each plot is 5 m x 10 m, a realistic size for a single allotment bed.
+const plotGeo = new THREE.BoxGeometry(5, 0.15, 10);
 const allotmentOrigin = { x: -230, z: -200 };
 for (let row = 0; row < 3; row++) {
   for (let col = 0; col < 5; col++) {
     const m = new THREE.Mesh(plotGeo, new THREE.MeshLambertMaterial({ color: PLOT_COLOURS.empty }));
-    m.position.set(allotmentOrigin.x + col * 3.2, 0.08, allotmentOrigin.z + row * 4.2);
+    m.position.set(allotmentOrigin.x + col * 6, 0.08, allotmentOrigin.z + row * 12);
     m.userData = { plot: true, state: 'empty', watered: false, timer: 0 };
     scene.add(m);
     plots.push(m);
@@ -118,20 +121,21 @@ for (let row = 0; row < 3; row++) {
 }
 // Allotment fence and sign.
 const fenceMat = new THREE.MeshLambertMaterial({ color: 0x8b6b43 });
-const fence = new THREE.Mesh(new THREE.BoxGeometry(44, 0.8, 0.2), fenceMat);
-fence.position.set(allotmentOrigin.x + 6, 0.4, allotmentOrigin.z - 3);
+const fence = new THREE.Mesh(new THREE.BoxGeometry(32, 1.0, 0.15), fenceMat);
+fence.position.set(allotmentOrigin.x + 12, 0.5, allotmentOrigin.z - 6);
 scene.add(fence);
 
 // ---------- Market stall ----------
+// Market stall: about 3 m wide, 2.5 m tall to the top of the counter.
 const stall = new THREE.Mesh(
-  new THREE.BoxGeometry(4, 2.4, 2.2),
+  new THREE.BoxGeometry(3, 1.2, 2),
   new THREE.MeshLambertMaterial({ color: 0xc0392b })
 );
-stall.position.set(0, 1.2, -4);
+stall.position.set(0, 0.6, -4);
 stall.userData.market = true;
 scene.add(stall);
-const awning = new THREE.Mesh(new THREE.BoxGeometry(4.6, 0.15, 2.8), new THREE.MeshLambertMaterial({ color: 0xf2efe6 }));
-awning.position.set(0, 2.5, -4);
+const awning = new THREE.Mesh(new THREE.BoxGeometry(3.6, 0.1, 2.6), new THREE.MeshLambertMaterial({ color: 0xf2efe6 }));
+awning.position.set(0, 2.4, -4);
 scene.add(awning);
 
 // ---------- Buildings ----------
@@ -196,16 +200,17 @@ function placeholderTown() {
       if (Math.abs(x) < 16 || Math.abs(z) < 16) continue; // keep the streets clear
       if (Math.abs(z - 130) < 14) continue;                 // keep the canal clear
       if (rng() < 0.35) continue;
-      const h = 5 + Math.floor(rng() * 3) * 3;
+      // Terraced houses: 5-6 m wide, 8-9 m deep, two to three storeys (about 2.6 m per floor).
+      const storeys = 2 + Math.floor(rng() * 2);
       addBuilding({
-        x: x + (rng() - 0.5) * 4, z: z + (rng() - 0.5) * 4,
-        width: 9 + rng() * 5, depth: 8 + rng() * 4, height: h,
+        x: x + (rng() - 0.5) * 3, z: z + (rng() - 0.5) * 3,
+        width: 5 + rng(), depth: 8 + rng(), height: storeys * 2.6 + 1.5,
         rotation: 0, isPub: false, name: null,
       });
     }
   }
-  // The Oddfellows: the central pub, on the square's north-east corner.
-  addBuilding({ x: 22, z: -18, width: 12, depth: 9, height: 8, isPub: true, name: ODDFELLOWS_NAME });
+  // The Oddfellows: a two-storey pub about 10 m wide, on the square's north-east corner.
+  addBuilding({ x: 22, z: -18, width: 10, depth: 8, height: 8, isPub: true, name: ODDFELLOWS_NAME });
 }
 
 function mulberry32(a) {
