@@ -1,0 +1,217 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Jarloo Avenue: Nantwich Allotments</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #0b0f14; color: #eee; font-family: system-ui, sans-serif; }
+  #info { position: fixed; top: 12px; left: 12px; right: 12px; font-size: 14px; line-height: 1.4;
+          background: rgba(0,0,0,0.5); padding: 8px 10px; border-radius: 8px; pointer-events: none; }
+  #attrib { position: fixed; bottom: 6px; right: 8px; font-size: 11px; opacity: 0.7; }
+</style>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+</head>
+<body>
+<div id="info">Coins: <span id="coins">0</span> · Harvested: <span id="harvest">0</span><br/>
+  Point at ground and pull trigger to teleport. Point at a plot to till, plant, water, and harvest. Point at the market stall and pull trigger to sell.</div>
+<div id="attrib">Map data © OpenStreetMap contributors (ODbL)</div>
+
+<script type="module">
+import * as THREE from 'three';
+import { VRButton } from 'three/addons/webxr/VRButton.js';
+
+// ---- Renderer / scene ----
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(window.devicePixelRatio);
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.xr.enabled = true;
+document.body.appendChild(renderer.domElement);
+document.body.appendChild(VRButton.createButton(renderer));
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x9fc7e0);
+scene.fog = new THREE.Fog(0x9fc7e0, 40, 160);
+
+const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.05, 300);
+const rig = new THREE.Group();
+rig.add(camera);
+scene.add(rig);
+
+scene.add(new THREE.HemisphereLight(0xffffff, 0x556644, 1.1));
+const sun = new THREE.DirectionalLight(0xffffff, 0.8);
+sun.position.set(30, 50, 20);
+scene.add(sun);
+
+// ---- Ground ----
+const ground = new THREE.Mesh(
+  new THREE.CircleGeometry(120, 48),
+  new THREE.MeshLambertMaterial({ color: 0x5f8a45 })
+);
+ground.rotation.x = -Math.PI / 2;
+ground.userData.teleport = true;
+scene.add(ground);
+
+// ---- Allotment plots (placeholder layout) ----
+const plots = [];
+const plotMat = new THREE.MeshLambertMaterial({ color: 0x6b4a2b });
+const PLOT_STATES = ['empty', 'tilled', 'planted', 'grown'];
+const plotGeo = new THREE.BoxGeometry(2.2, 0.1, 3.4);
+for (let row = 0; row < 3; row++) {
+  for (let col = 0; col < 4; col++) {
+    const m = new THREE.Mesh(plotGeo, plotMat.clone());
+    m.position.set(-6 + col * 3.0, 0.05, -14 - row * 4.0);
+    m.userData = { plot: true, state: 'empty', watered: false, timer: 0 };
+    scene.add(m);
+    plots.push(m);
+  }
+}
+
+// ---- Market stall (placeholder) ----
+const stall = new THREE.Mesh(
+  new THREE.BoxGeometry(4, 2.2, 2),
+  new THREE.MeshLambertMaterial({ color: 0xc0392b })
+);
+stall.position.set(8, 1.1, -6);
+stall.userData.market = true;
+scene.add(stall);
+
+// ---- Placeholder town blocks; real OSM buildings go in data/nantwich.json ----
+const buildingMat = new THREE.MeshLambertMaterial({ color: 0xd9cbb0 });
+async function loadBuildings() {
+  try {
+    const res = await fetch('data/nantwich.json');
+    if (!res.ok) throw new Error('no data file');
+    const data = await res.json();
+    for (const b of data.buildings) {
+      const geo = new THREE.BoxGeometry(b.width, b.height, b.depth);
+      const m = new THREE.Mesh(geo, buildingMat);
+      m.position.set(b.x, b.height / 2, b.z);
+      m.rotation.y = b.rotation || 0;
+      scene.add(m);
+      if (b.name) addLabel(b.name, b.x, b.height + 1, b.z, b.isPub);
+    }
+  } catch {
+    // Fallback: a few generic blocks so the scene is not empty.
+    for (let i = 0; i < 8; i++) {
+      const m = new THREE.Mesh(new THREE.BoxGeometry(6, 6 + (i % 3) * 2, 6), buildingMat);
+      m.position.set(-30 + i * 9, 3 + (i % 3), 30);
+      scene.add(m);
+    }
+  }
+}
+function addLabel(text, x, y, z, isPub) {
+  const c = document.createElement('canvas');
+  c.width = 512; c.height = 96;
+  const g = c.getContext('2d');
+  g.fillStyle = isPub ? 'rgba(90,30,20,0.9)' : 'rgba(0,0,0,0.6)';
+  g.fillRect(0, 0, 512, 96);
+  g.fillStyle = '#fff';
+  g.font = 'bold 40px sans-serif';
+  g.textAlign = 'center';
+  g.fillText(text, 256, 60);
+  const tex = new THREE.CanvasTexture(c);
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex }));
+  sprite.position.set(x, y, z);
+  sprite.scale.set(6, 1.1, 1);
+  scene.add(sprite);
+}
+loadBuildings();
+
+// ---- Economy ----
+let coins = 0, harvested = 0;
+const PRICE = 5;
+const coinsEl = document.getElementById('coins');
+const harvestEl = document.getElementById('harvest');
+function refreshHud() {
+  coinsEl.textContent = coins;
+  harvestEl.textContent = harvested;
+}
+
+// ---- Plot actions ----
+const GROW_TIME = 20; // seconds from planted to grown
+function actOnPlot(plot) {
+  const d = plot.userData;
+  if (d.state === 'empty') {
+    d.state = 'tilled';
+    plot.material.color.set(0x4a2f18);
+  } else if (d.state === 'tilled') {
+    d.state = 'planted';
+    d.timer = 0;
+    plot.material.color.set(0x3d6b2a);
+  } else if (d.state === 'planted') {
+    d.watered = true; // water once; growth is slowed without water
+  } else if (d.state === 'grown') {
+    d.state = 'empty';
+    harvested++;
+    plot.material.color.set(0x6b4a2b);
+    refreshHud();
+  }
+}
+
+// ---- Controllers ----
+const raycaster = new THREE.Raycaster();
+const tmpMat = new THREE.Matrix4();
+function setupController(i) {
+  const controller = renderer.xr.getController(i);
+  rig.add(controller);
+  controller.addEventListener('selectstart', () => onSelect(controller));
+  const geo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, -2)]);
+  controller.add(new THREE.Line(geo, new THREE.LineBasicMaterial({ color: 0xffffff })));
+  return controller;
+}
+setupController(0);
+setupController(1);
+
+function onSelect(controller) {
+  tmpMat.identity().extractRotation(controller.matrixWorld);
+  raycaster.ray.origin.setFromMatrixPosition(controller.matrixWorld);
+  raycaster.ray.direction.set(0, 0, -1).applyMatrix4(tmpMat);
+  const hits = raycaster.intersectObjects(scene.children, true);
+  if (!hits.length) return;
+  const obj = hits[0].object;
+  if (obj.userData.plot) {
+    actOnPlot(obj);
+  } else if (obj.userData.market) {
+    const sellable = harvested;
+    coins += sellable * PRICE;
+    harvested = 0;
+    refreshHud();
+  } else if (obj.userData.teleport) {
+    const p = hits[0].point;
+    rig.position.set(p.x, 0, p.z);
+  }
+}
+
+// ---- Loop ----
+const clock = new THREE.Clock();
+renderer.setAnimationLoop(() => {
+  const dt = clock.getDelta();
+  for (const p of plots) {
+    const d = p.userData;
+    if (d.state === 'planted') {
+      d.timer += dt * (d.watered ? 1 : 0.4);
+      if (d.timer >= GROW_TIME) {
+        d.state = 'grown';
+        p.material.color.set(0x7fbf3f);
+      }
+    }
+  }
+  renderer.render(scene, camera);
+});
+
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+</script>
+</body>
+</html>
