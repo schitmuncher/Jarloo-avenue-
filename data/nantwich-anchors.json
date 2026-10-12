@@ -1,0 +1,141 @@
+{
+  "attribution": "Anchor coordinates: Historic England list entries, Wikipedia, WhatPub/CAMRA and Nantwich Town Council (see README). Street, river and canal widths are estimates. Map data © OpenStreetMap contributors (ODbL).",
+  "centre": { "lat": 53.067132, "lon": -2.517664 },
+  "bbox": { "south": 53.051127, "west": -2.544484, "north": 53.083138, "east": -2.490843 },
+  "square": {
+    "name": "The Square (Market Place)",
+    "centre": { "lat": 53.06720, "lon": -2.52200 },
+    "widthM": 60,
+    "depthM": 80,
+    "verified": false,
+    "note": "Extent is an estimate between the High Street frontages and the churchyard."
+  },
+  "marketStall": { "lat": 53.06715, "lon": -2.52215, "verified": false },
+  "warMemorial": { "name": "War Memorial", "lat": 53.06713, "lon": -2.52196, "verified": true },
+  "streets": [
+    {
+      "name": "High Street",
+      "widthM": 10,
+      "verified": false,
+      "points": [
+        { "lat": 53.067469, "lon": -2.523667 },
+        { "lat": 53.067303, "lon": -2.522709 },
+        { "lat": 53.066837, "lon": -2.522301 },
+        { "lat": 53.066523, "lon": -2.522222 }
+      ]
+    },
+    {
+      "name": "Welsh Row",
+      "widthM": 14,
+      "verified": false,
+      "points": [
+        { "lat": 53.067601, "lon": -2.524489 },
+        { "lat": 53.067603, "lon": -2.525937 },
+        { "lat": 53.068001, "lon": -2.527419 },
+        { "lat": 53.067561, "lon": -2.529428 },
+        { "lat": 53.068057, "lon": -2.533016 }
+      ]
+    },
+    {
+      "name": "Hospital Street",
+      "widthM": 9,
+      "verified": false,
+      "points": [
+        { "lat": 53.066291, "lon": -2.521802 },
+        { "lat": 53.066446, "lon": -2.521207 },
+        { "lat": 53.066065, "lon": -2.520098 },
+        { "lat": 53.066189, "lon": -2.518368 },
+        { "lat": 53.065478, "lon": -2.514405 }
+      ]
+    },
+    {
+      "name": "Pillory Street",
+      "widthM": 8,
+      "verified": false,
+      "points": [
+        { "lat": 53.066291, "lon": -2.521802 },
+        { "lat": 53.065387, "lon": -2.520895 }
+      ]
+    },
+    {
+      "name": "Beam Street",
+      "widthM": 11,
+      "verified": false,
+      "points": [
+        { "lat": 53.068121, "lon": -2.522704 },
+        { "lat": 53.068367, "lon": -2.521916 },
+        { "lat": 53.068637, "lon": -2.521905 },
+        { "lat": 53.069172, "lon": -2.516628 }
+      ]
+    },
+    {
+      "name": "Mill Street",
+      "widthM": 7,
+      "verified": false,
+      "points": [
+        { "lat": 53.066061, "lon": -2.523053 },
+        { "lat": 53.065810, "lon": -2.522841 }
+      ]
+    },
+    {
+      "name": "Monks Lane",
+      "widthM": 7,
+      "verified": false,
+      "points": [
+        { "lat": 53.067084, "lon": -2.519349 },
+        { "lat": 53.067356, "lon": -2.518681 }
+      ]
+    }
+  ],
+  "river": {
+    "name": "River Weaver",
+    "widthM": 10,
+    "verified": false,
+    "note": "Centreline approximated from the bridge and footbridge crossings.",
+    "points": [
+      { "lat": 53.0547, "lon": -2.5243 },
+      { "lat": 53.0625, "lon": -2.5257 },
+      { "lat": 53.0659, "lon": -2.5249 },
+      { "lat": 53.0676, "lon": -2.5245 },
+      { "lat": 53.0698, "lon": -2.5259 },
+      { "lat": 53.0727, "lon": -2.5233 },
+      { "lat": 53.0778, "lon": -2.5222 },
+      { "lat": 53.0789, "lon": -2.5196 }
+    ]
+  },
+  "canal": {
+    "name": "Shropshire Union Canal",
+    "widthM": 10,
+    "towpathWidthM": 1.5,
+    "verified": false,
+    "note": "Main-line centreline through the aqueduct and Bridge 92 to the basin. Width is an estimate.",
+    "points": [
+      { "lat": 53.060785, "lon": -2.536921, "name": "Marsh Lane Bridge (91)" },
+      { "lat": 53.069232, "lon": -2.535697, "name": "Nantwich Aqueduct" },
+      { "lat": 53.07233, "lon": -2.53967, "name": "Nantwich Junction Bridge (92)" },
+      { "lat": 53.071207, "lon": -2.540244, "name": "Basin" }
+    ]
+  },
+  "allotments": {
+    "name": "Brookfield Allotments",
+    "centre": { "lat": 53.06167, "lon": -2.5227 },
+    "verified": false,
+    "note": "Approximate centre of Brookfield Park allotments. Real plot polygons should come from OSM."
+  },
+  "pubs": [
+    { "name": "The Oddfellows Arms", "lat": 53.067561, "lon": -2.529428, "address": "97 Welsh Row", "storeys": 2, "verified": true, "source": "Historic England list entry 1249538" },
+    { "name": "The Crown Hotel", "lat": 53.067303, "lon": -2.522709, "address": "24-26 High Street", "storeys": 3, "verified": true, "source": "Historic England list entry 1330054" },
+    { "name": "The Lamb Hotel", "lat": 53.066446, "lon": -2.521207, "address": "Hospital Street", "storeys": 3, "verified": true, "source": "Wikipedia" },
+    { "name": "Black Lion", "lat": 53.067603, "lon": -2.525937, "address": "29 Welsh Row", "storeys": 3, "verified": true, "source": "WhatPub" },
+    { "name": "Wilbraham Arms", "lat": 53.068001, "lon": -2.527419, "address": "58 Welsh Row", "storeys": 3, "verified": true, "source": "UseYourLocal" },
+    { "name": "Talbot", "lat": 53.06785, "lon": -2.52295, "address": "4 Oatmarket", "storeys": 2, "verified": true, "source": "WhatPub" },
+    { "name": "Ye Olde Vaults", "lat": 53.066729, "lon": -2.52227, "address": "48 High Street", "storeys": 3, "verified": true, "source": "Historic England" },
+    { "name": "The Vine Inn", "lat": 53.066065, "lon": -2.520098, "address": "42 Hospital Street", "storeys": 2, "verified": true, "source": "Historic England" }
+  ],
+  "landmarks": [
+    { "name": "St Mary's Church", "lat": 53.067015, "lon": -2.520646, "heightM": 31, "verified": true, "source": "Wikipedia" },
+    { "name": "Queen's Aid House", "lat": 53.066776, "lon": -2.521882, "storeys": 3, "verified": true, "source": "Historic England" },
+    { "name": "Churche's Mansion", "lat": 53.065478, "lon": -2.514405, "storeys": 3, "verified": true, "source": "Historic England" },
+    { "name": "Nantwich Bridge", "lat": 53.067601, "lon": -2.524489, "verified": true, "source": "Historic England" }
+  ]
+}

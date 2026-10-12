@@ -19,7 +19,13 @@ Real buildings, shops and pubs come from OpenStreetMap:
 node scripts/fetch-osm.mjs
 ```
 
-This writes `data/nantwich.json`. Without it, the game shows a few generic placeholder blocks.
+This writes `data/nantwich.json`. If it is present, the game uses those real footprints.
+
+## Map anchors
+
+`data/nantwich-anchors.json` holds the layout the game is built on: the Square, the main streets, the River Weaver, the Shropshire Union Canal, the Brookfield allotments, and the pubs and landmarks. Each point has a `verified` flag. Items marked `false` are estimates (street widths, the Square's extent, river and canal centrelines, allotment position) and should be replaced with OSM geometry when available.
+
+Without the OSM file, the game generates terraced houses along each street.
 
 Map data © OpenStreetMap contributors, licensed under the Open Database Licence (ODbL). The game displays this attribution on screen.
 

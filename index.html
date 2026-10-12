@@ -38,110 +38,73 @@ document.body.appendChild(VRButton.createButton(renderer));
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0xa9cfe6);
-scene.fog = new THREE.Fog(0xa9cfe6, 150, 420);
+scene.fog = new THREE.Fog(0xa9cfe6, 250, 900);
 
-const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.05, 900);
-const rig = new THREE.Group(); // player position in world space
+const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.05, 1600);
+const rig = new THREE.Group(); // the player's position in world space
 rig.add(camera);
 scene.add(rig);
-rig.position.set(0, 0, 40); // start at the southern edge of the town square
 
 scene.add(new THREE.HemisphereLight(0xffffff, 0x4d6b3c, 1.0));
 const sun = new THREE.DirectionalLight(0xfff4e0, 0.9);
 sun.position.set(120, 200, 80);
 scene.add(sun);
 
-// World units are metres, with the town centre at (0, 0). This matches the
-// scale of the OSM data (scripts/fetch-osm.mjs) and the Minecraft reference world.
+// ---------- Coordinates ----------
+// World units are metres. The origin is the map centre (53.067132, -2.517664), the
+// same centre scripts/fetch-osm.mjs uses, so OSM data and the anchor file line up.
+const CENTRE = { lat: 53.067132, lon: -2.517664 };
+const M_PER_DEG_LAT = 111320;
+const M_PER_DEG_LON = 111320 * Math.cos(CENTRE.lat * Math.PI / 180);
+const toXZ = (p) => new THREE.Vector3((p.lon - CENTRE.lon) * M_PER_DEG_LON, 0, -(p.lat - CENTRE.lat) * M_PER_DEG_LAT);
 
-// ---------- Terrain ----------
-const GROUND_SIZE = 1800; // play area, roughly the town plus its edges
-const ground = new THREE.Mesh(
-  new THREE.PlaneGeometry(GROUND_SIZE, GROUND_SIZE),
-  new THREE.MeshLambertMaterial({ color: 0x6a9a4e })
-);
-ground.rotation.x = -Math.PI / 2;
-ground.userData.teleport = true;
-scene.add(ground);
+// ---------- Materials ----------
+const M = (color) => new THREE.MeshLambertMaterial({ color, side: THREE.DoubleSide });
+const groundMat = M(0x6a9a4e);
+const roadMat = M(0x5b5c60);
+const towpathMat = M(0x8a7a5c);
+const waterMat = M(0x2f6f8f);
+const squareMat = M(0xa39b8c);
+const houseMat = M(0xd8c8a8);   // timber/plaster tone
+const pubMat = M(0x8c3b2a);
+const landmarkMat = M(0xe3b65c);
+const churchMat = M(0xb9a58a);
+const fenceMat = M(0x8b6b43);
+const stallMat = M(0xc0392b);
+const awningMat = M(0xf2efe6);
+const PLOT_COLOURS = { empty: 0x6b4a2b, tilled: 0x4a2f18, planted: 0x3d6b2a, grown: 0x7fbf3f };
 
-// Roads: a simple street grid through the town centre.
-const roadMat = new THREE.MeshLambertMaterial({ color: 0x55565a });
-function road(x, z, w, d) {
-  const m = new THREE.Mesh(new THREE.PlaneGeometry(w, d), roadMat);
-  m.rotation.x = -Math.PI / 2;
-  m.position.set(x, 0.02, z);
+// ---------- Helpers ----------
+function mulberry32(a) {
+  return function () {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+// A flat strip along a polyline (roads, rivers, canal).
+function ribbon(pts, width, mat, y) {
+  const pos = [], idx = [];
+  const half = width / 2;
+  for (let i = 0; i < pts.length; i++) {
+    const a = pts[Math.max(0, i - 1)], b = pts[Math.min(pts.length - 1, i + 1)];
+    const d = new THREE.Vector3().subVectors(b, a).normalize();
+    const n = new THREE.Vector3(-d.z, 0, d.x).multiplyScalar(half);
+    const p = pts[i];
+    pos.push(p.x + n.x, y, p.z + n.z, p.x - n.x, y, p.z - n.z);
+    if (i > 0) { const k = (i - 1) * 2; idx.push(k, k + 1, k + 2, k + 1, k + 3, k + 2); }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setIndex(idx);
+  g.computeVertexNormals();
+  const m = new THREE.Mesh(g, mat);
   m.userData.teleport = true;
   scene.add(m);
+  return m;
 }
-// Widths in metres: main streets ~8 m, side streets ~6 m (typical for a market town).
-road(0, 0, 8, 400);    // north-south spine
-road(0, 0, 400, 8);    // east-west high street
-road(-120, 60, 6, 260);
-road(120, -60, 6, 260);
-
-// Canal: a blue strip running across the south of town, with a towpath.
-// Canal ~10 m wide (Shropshire Union style narrow-beam channel is ~6 m; keep 10 m for the basin).
-const canal = new THREE.Mesh(
-  new THREE.PlaneGeometry(900, 10),
-  new THREE.MeshLambertMaterial({ color: 0x2f6f8f })
-);
-canal.rotation.x = -Math.PI / 2;
-canal.position.set(0, 0.03, 130);
-scene.add(canal);
-const towpath = new THREE.Mesh(new THREE.PlaneGeometry(900, 3), new THREE.MeshLambertMaterial({ color: 0x8a7a5c }));
-towpath.rotation.x = -Math.PI / 2;
-towpath.position.set(0, 0.04, 127.5);
-towpath.userData.teleport = true;
-scene.add(towpath);
-
-// Town square (market place) in the middle, where the market stall sits.
-const square = new THREE.Mesh(
-  new THREE.PlaneGeometry(60, 40),
-  new THREE.MeshLambertMaterial({ color: 0xa39b8c })
-);
-square.rotation.x = -Math.PI / 2;
-square.position.set(0, 0.03, 0);
-square.userData.teleport = true;
-scene.add(square);
-
-// ---------- Allotments (the farming plots) ----------
-const plots = [];
-const PLOT_COLOURS = { empty: 0x6b4a2b, tilled: 0x4a2f18, planted: 0x3d6b2a, grown: 0x7fbf3f };
-// Each plot is 5 m x 10 m, a realistic size for a single allotment bed.
-const plotGeo = new THREE.BoxGeometry(5, 0.15, 10);
-const allotmentOrigin = { x: -230, z: -200 };
-for (let row = 0; row < 3; row++) {
-  for (let col = 0; col < 5; col++) {
-    const m = new THREE.Mesh(plotGeo, new THREE.MeshLambertMaterial({ color: PLOT_COLOURS.empty }));
-    m.position.set(allotmentOrigin.x + col * 6, 0.08, allotmentOrigin.z + row * 12);
-    m.userData = { plot: true, state: 'empty', watered: false, timer: 0 };
-    scene.add(m);
-    plots.push(m);
-  }
-}
-// Allotment fence and sign.
-const fenceMat = new THREE.MeshLambertMaterial({ color: 0x8b6b43 });
-const fence = new THREE.Mesh(new THREE.BoxGeometry(32, 1.0, 0.15), fenceMat);
-fence.position.set(allotmentOrigin.x + 12, 0.5, allotmentOrigin.z - 6);
-scene.add(fence);
-
-// ---------- Market stall ----------
-// Market stall: about 3 m wide, 2.5 m tall to the top of the counter.
-const stall = new THREE.Mesh(
-  new THREE.BoxGeometry(3, 1.2, 2),
-  new THREE.MeshLambertMaterial({ color: 0xc0392b })
-);
-stall.position.set(0, 0.6, -4);
-stall.userData.market = true;
-scene.add(stall);
-const awning = new THREE.Mesh(new THREE.BoxGeometry(3.6, 0.1, 2.6), new THREE.MeshLambertMaterial({ color: 0xf2efe6 }));
-awning.position.set(0, 2.4, -4);
-scene.add(awning);
-
-// ---------- Buildings ----------
-const buildingMat = new THREE.MeshLambertMaterial({ color: 0xd8c8a8 }); // timber/plaster tone
-const pubMat = new THREE.MeshLambertMaterial({ color: 0x8c3b2a });
-const landmarkMat = new THREE.MeshLambertMaterial({ color: 0xe3b65c });
 
 function addLabel(text, x, y, z, style = 'plain') {
   const c = document.createElement('canvas');
@@ -160,69 +123,156 @@ function addLabel(text, x, y, z, style = 'plain') {
   scene.add(sprite);
 }
 
-function addBuilding(b) {
-  const isLandmark = isOddfellows(b.name);
-  const mat = isLandmark ? landmarkMat : b.isPub ? pubMat : buildingMat;
+// A box building. Width runs along local x, depth along local z, rotation.y turns it.
+function addBuilding(b, mat = houseMat) {
   const m = new THREE.Mesh(new THREE.BoxGeometry(b.width, b.height, b.depth), mat);
   m.position.set(b.x, b.height / 2, b.z);
   m.rotation.y = b.rotation || 0;
   m.userData.building = true;
   scene.add(m);
-  if (b.name && (b.isPub || isLandmark)) {
-    addLabel(b.name, b.x, b.height + 2, b.z, isLandmark ? 'landmark' : 'pub');
-  }
+  return m;
 }
 
-// Matches "The Oddfellows", "Oddfellows" and "Oddfellows Arms" from OSM names.
-const isOddfellows = (name) => !!name && /oddfellow/i.test(name);
-const ODDFELLOWS_NAME = 'The Oddfellows';
-
-// Use real OSM footprints when data/nantwich.json exists (run scripts/fetch-osm.mjs).
-// Otherwise build a placeholder town so the scene is never empty.
-async function buildTown() {
-  try {
-    const res = await fetch('data/nantwich.json');
-    if (!res.ok) throw new Error('no data file');
-    const data = await res.json();
-    for (const b of data.buildings) addBuilding(b);
-    return;
-  } catch {
-    placeholderTown();
-  }
-}
-
-// Simple grid of terraced houses around the square, leaving the roads clear.
-function placeholderTown() {
-  const rng = mulberry32(42);
-  for (let gx = -6; gx <= 6; gx++) {
-    for (let gz = -6; gz <= 6; gz++) {
-      const x = gx * 26, z = gz * 26;
-      if (Math.abs(x) < 16 || Math.abs(z) < 16) continue; // keep the streets clear
-      if (Math.abs(z - 130) < 14) continue;                 // keep the canal clear
-      if (rng() < 0.35) continue;
-      // Terraced houses: 5-6 m wide, 8-9 m deep, two to three storeys (about 2.6 m per floor).
-      const storeys = 2 + Math.floor(rng() * 2);
-      addBuilding({
-        x: x + (rng() - 0.5) * 3, z: z + (rng() - 0.5) * 3,
-        width: 5 + rng(), depth: 8 + rng(), height: storeys * 2.6 + 1.5,
-        rotation: 0, isPub: false, name: null,
-      });
+// Terraced houses on both sides of a street, kept clear of the Square, churchyard and pubs.
+function terraces(pts, streetWidth, rng, avoid) {
+  for (let i = 0; i < pts.length - 1; i++) {
+    const a = pts[i], b = pts[i + 1];
+    const len = a.distanceTo(b);
+    const dir = new THREE.Vector3().subVectors(b, a).normalize();
+    const perp = new THREE.Vector3(-dir.z, 0, dir.x);
+    const rot = Math.atan2(-dir.z, dir.x);
+    for (let s = 6; s < len - 6; s += 7) {
+      for (const side of [-1, 1]) {
+        if (rng() < 0.25) continue;
+        const c = a.clone().addScaledVector(dir, s).addScaledVector(perp, side * (streetWidth / 2 + 4.5));
+        if (avoid(c.x, c.z)) continue;
+        const storeys = 2 + Math.floor(rng() * 2);
+        addBuilding({
+          x: c.x, z: c.z, width: 6.5, depth: 8,
+          height: storeys * 2.6 + 1.5, rotation: rot,
+        });
+      }
     }
   }
-  // The Oddfellows: a two-storey pub about 10 m wide, on the square's north-east corner.
-  addBuilding({ x: 22, z: -18, width: 10, depth: 8, height: 8, isPub: true, name: ODDFELLOWS_NAME });
 }
 
-function mulberry32(a) {
-  return function () {
-    a |= 0; a = (a + 0x6D2B79F5) | 0;
-    let t = Math.imul(a ^ (a >>> 15), 1 | a);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
+// ---------- Load the map anchors ----------
+let anchors;
+try {
+  anchors = await (await fetch('data/nantwich-anchors.json')).json();
+} catch (e) {
+  document.getElementById('info').textContent =
+    'Could not load data/nantwich-anchors.json. Serve this folder with a web server (for example GitHub Pages).';
+  throw e;
 }
 
-buildTown();
+// Optional full OSM footprints (scripts/fetch-osm.mjs). If absent, terraces are generated.
+let osm = null;
+try {
+  const r = await fetch('data/nantwich.json');
+  if (r.ok) osm = await r.json();
+} catch { osm = null; }
+
+// ---------- Build the world ----------
+const rng = mulberry32(42);
+const pubPositions = [];
+const squareC = toXZ(anchors.square.centre);
+const churchPos = anchors.landmarks.find((l) => /St Mary/.test(l.name));
+const churchC = churchPos ? toXZ(churchPos) : null;
+
+function avoid(x, z) {
+  // Keep houses off the Square, the churchyard and the pub frontages.
+  if (Math.abs(x - squareC.x) < anchors.square.widthM / 2 + 4 &&
+      Math.abs(z - squareC.z) < anchors.square.depthM / 2 + 4) return true;
+  if (churchC && Math.hypot(x - churchC.x, z - churchC.z) < 25) return true;
+  return pubPositions.some((p) => Math.hypot(p.x - x, p.z - z) < 14);
+}
+
+// Ground: the whole mapped area, so everything sits on land.
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(3600, 3600), groundMat);
+ground.rotation.x = -Math.PI / 2;
+ground.userData.teleport = true;
+scene.add(ground);
+
+// Streets.
+for (const s of anchors.streets) ribbon(s.points.map(toXZ), s.widthM, roadMat, 0.05);
+
+// The Square (market place) and the market stall.
+const sqMesh = new THREE.Mesh(new THREE.PlaneGeometry(anchors.square.widthM, anchors.square.depthM), squareMat);
+sqMesh.rotation.x = -Math.PI / 2;
+sqMesh.position.set(squareC.x, 0.06, squareC.z);
+sqMesh.userData.teleport = true;
+scene.add(sqMesh);
+
+const stallC = toXZ(anchors.marketStall);
+const stall = new THREE.Mesh(new THREE.BoxGeometry(3, 1.2, 2), stallMat);
+stall.position.set(stallC.x, 0.6, stallC.z);
+stall.userData.market = true;
+scene.add(stall);
+const awning = new THREE.Mesh(new THREE.BoxGeometry(3.6, 0.1, 2.6), awningMat);
+awning.position.set(stallC.x, 2.4, stallC.z);
+scene.add(awning);
+
+// River and canal (towpath drawn as a wider strip beneath the water).
+ribbon(anchors.river.points.map(toXZ), anchors.river.widthM, waterMat, 0.03);
+const canalPts = anchors.canal.points.map(toXZ);
+ribbon(canalPts, anchors.canal.widthM + 2 * anchors.canal.towpathWidthM, towpathMat, 0.02);
+ribbon(canalPts, anchors.canal.widthM, waterMat, 0.03);
+
+// Pubs and landmarks from the anchor file.
+for (const p of anchors.pubs) {
+  const v = toXZ(p);
+  const storeys = p.storeys || 2;
+  const isLandmark = /oddfellow/i.test(p.name);
+  pubPositions.push(v);
+  addBuilding({ x: v.x, z: v.z, width: 10, depth: 8, height: storeys * 3 + 1.5, rotation: 0 },
+              isLandmark ? landmarkMat : pubMat);
+  addLabel(p.name, v.x, storeys * 3 + 4, v.z, isLandmark ? 'landmark' : 'pub');
+}
+for (const l of anchors.landmarks) {
+  const v = toXZ(l);
+  if (/St Mary/.test(l.name)) {
+    addBuilding({ x: v.x, z: v.z, width: 14, depth: 14, height: l.heightM || 31, rotation: 0 }, churchMat);
+    addLabel(l.name, v.x, (l.heightM || 31) + 3, v.z, 'landmark');
+  } else if (l.storeys) {
+    addBuilding({ x: v.x, z: v.z, width: 9, depth: 8, height: l.storeys * 2.8 + 2, rotation: 0 }, houseMat);
+  }
+}
+
+// Buildings: real OSM footprints if available, otherwise generated terraces.
+if (osm) {
+  const anchorNames = new Set([...anchors.pubs, ...anchors.landmarks].map((x) => x.name));
+  for (const b of osm.buildings) {
+    if (b.name && anchorNames.has(b.name)) continue;
+    addBuilding(b, b.isPub ? pubMat : houseMat);
+  }
+} else {
+  for (const s of anchors.streets) terraces(s.points.map(toXZ), s.widthM, rng, avoid);
+}
+
+// Allotments (Brookfield): 5 x 3 plots, each 5 m x 10 m, with a fence around them.
+const plots = [];
+const ac = toXZ(anchors.allotments.centre);
+const plotGeo = new THREE.BoxGeometry(5, 0.15, 10);
+for (let row = 0; row < 3; row++) {
+  for (let col = 0; col < 5; col++) {
+    const m = new THREE.Mesh(plotGeo, M(PLOT_COLOURS.empty));
+    m.position.set(ac.x + (col - 2) * 6, 0.08, ac.z + (row - 1) * 12);
+    m.userData = { plot: true, state: 'empty', watered: false, timer: 0 };
+    scene.add(m);
+    plots.push(m);
+  }
+}
+const fenceN = new THREE.Mesh(new THREE.BoxGeometry(38, 1.0, 0.15), fenceMat);
+fenceN.position.set(ac.x, 0.5, ac.z - 20);
+const fenceS = fenceN.clone(); fenceS.position.z = ac.z + 20;
+const fenceW = new THREE.Mesh(new THREE.BoxGeometry(0.15, 1.0, 40), fenceMat);
+fenceW.position.set(ac.x - 19, 0.5, ac.z);
+const fenceE = fenceW.clone(); fenceE.position.x = ac.x + 19;
+scene.add(fenceN, fenceS, fenceW, fenceE);
+
+// Start the player at the market stall.
+rig.position.set(stallC.x, 0, stallC.z + 6);
 
 // ---------- Economy ----------
 let coins = 0, harvested = 0;
