@@ -133,6 +133,19 @@ function addBuilding(b, mat = houseMat) {
   return m;
 }
 
+// A real building outline from OSM, extruded to its height.
+function addFootprint(b, mat = houseMat) {
+  // Shape is drawn in the XY plane; after rotateX(-PI/2) its y becomes world -z
+  // and its extrusion becomes world up, so the shape uses (x, -z).
+  const shape = new THREE.Shape(b.footprint.map(([x, z]) => new THREE.Vector2(x, -z)));
+  const geo = new THREE.ExtrudeGeometry(shape, { depth: b.height, bevelEnabled: false });
+  geo.rotateX(-Math.PI / 2);
+  const m = new THREE.Mesh(geo, mat);
+  m.userData.building = true;
+  scene.add(m);
+  return m;
+}
+
 // Terraced houses on both sides of a street, kept clear of the Square, churchyard and pubs.
 function terraces(pts, streetWidth, rng, avoid) {
   for (let i = 0; i < pts.length - 1; i++) {
@@ -194,8 +207,15 @@ ground.rotation.x = -Math.PI / 2;
 ground.userData.teleport = true;
 scene.add(ground);
 
-// Streets.
-for (const s of anchors.streets) ribbon(s.points.map(toXZ), s.widthM, roadMat, 0.05);
+// Streets: every named OSM street when the data is present, otherwise the anchor streets.
+if (osm && osm.streets?.length) {
+  for (const s of osm.streets) {
+    const pts = s.points.map((p) => new THREE.Vector3(p.x, 0, p.z));
+    ribbon(pts, s.widthM, roadMat, 0.05);
+  }
+} else {
+  for (const s of anchors.streets) ribbon(s.points.map(toXZ), s.widthM, roadMat, 0.05);
+}
 
 // The Square (market place) and the market stall.
 const sqMesh = new THREE.Mesh(new THREE.PlaneGeometry(anchors.square.widthM, anchors.square.depthM), squareMat);
@@ -244,7 +264,9 @@ if (osm) {
   const anchorNames = new Set([...anchors.pubs, ...anchors.landmarks].map((x) => x.name));
   for (const b of osm.buildings) {
     if (b.name && anchorNames.has(b.name)) continue;
-    addBuilding(b, b.isPub ? pubMat : houseMat);
+    const mat = b.isPub ? pubMat : houseMat;
+    if (b.footprint) addFootprint(b, mat);
+    else addBuilding(b, mat);
   }
 } else {
   for (const s of anchors.streets) terraces(s.points.map(toXZ), s.widthM, rng, avoid);
